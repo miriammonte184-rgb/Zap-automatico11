@@ -25,8 +25,25 @@ function isUrl(input: RequestInfo | URL): input is URL {
   return typeof URL !== "undefined" && input instanceof URL;
 }
 
+// Optional base URL for browser environments (e.g. Vite frontend).
+// In the ZapAuto frontend, this is typically provided as VITE_API_BASE_URL.
+// When set, relative API paths like "/api/healthz" will be prefixed with this base URL.
+const BASE_URL =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  typeof import.meta !== "undefined" && (import.meta as any).env
+    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((import.meta as any).env.VITE_API_BASE_URL as string | undefined) ?? ""
+    : "";
+
 function resolveUrl(input: RequestInfo | URL): string {
-  if (typeof input === "string") return input;
+  if (typeof input === "string") {
+    const isAbsolute = /^https?:\/\//i.test(input);
+    if (isAbsolute || !BASE_URL) return input;
+
+    const trimmedBase = BASE_URL.replace(/\/$/, "");
+    return `${trimmedBase}${input}`;
+  }
+
   if (isUrl(input)) return input.toString();
   return input.url;
 }

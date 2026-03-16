@@ -1,9 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "buildCommand": "cd Zap-Connect/artifacts/zapauto && corepack enable && pnpm install && pnpm build",
+  "buildCommand": "cd Zap-Connect/artifacts/zapauto && npm install && npm run build",
   "outputDirectory": "Zap-Connect/artifacts/zapauto/dist",
-  "installCommand": "cd Zap-Connect/artifacts/zapauto && corepack enable && pnpm install",
+  "installCommand": "cd Zap-Connect/artifacts/zapauto && npm install",
   "env": {
     "VITE_API_BASE_URL": "https://zap-automatico11-production.up.railway.app"
   }

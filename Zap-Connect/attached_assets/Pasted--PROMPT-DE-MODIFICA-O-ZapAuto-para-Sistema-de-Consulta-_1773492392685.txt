@@ -1,0 +1,393 @@
+# PROMPT DE MODIFICAÇÃO — ZapAuto para Sistema de Consulta de Materiais e OPs
+
+## CONTEXTO
+
+Você é um desenvolvedor Node.js expert. Você tem em mãos um sistema chamado **ZapAuto** — um painel web (Node.js + Express + EJS + Bootstrap 5 + SQLite + whatsapp-web.js) que responde mensagens do WhatsApp automaticamente com base em regras cadastradas num banco de dados SQLite.
+
+**Você deve MODIFICAR esse sistema** para que ele funcione como um **sistema automático de consulta de materiais e Ordens de Produção (OPs)**, usando uma planilha Excel como banco de dados dinâmico.
+
+---
+
+## STACK ATUAL (não mude, apenas adapte)
+
+- **Backend:** Node.js + Express.js
+- **WhatsApp:** whatsapp-web.js com QR Code + LocalAuth
+- **Frontend:** EJS + Bootstrap 5 + JavaScript puro
+- **Banco de dados:** SQLite (better-sqlite3) — usado para sessão, logs, whitelist e configurações
+- **Leitura da planilha:** adicionar `xlsx` (SheetJS) como nova dependência (`npm install xlsx`)
+
+---
+
+## FUNCIONALIDADES A CRIAR / MODIFICAR
+
+---
+
+### 1. WHITELIST DE NÚMEROS (NOVA FUNCIONALIDADE — OBRIGATÓRIA)
+
+O sistema **NÃO deve responder qualquer número**. Deve responder **somente números autorizados**.
+
+#### Implementação:
+- Criar tabela SQLite `whitelist` com campos: `id`, `numero` (formato: 5511999999999), `nome`, `ativo` (0/1), `criado_em`
+- Criar tela no painel: **"Números Autorizados"** com CRUD completo (adicionar, listar, ativar/desativar, excluir)
+- No serviço WhatsApp (`whatsappService.js`), antes de processar qualquer mensagem recebida:
+  ```
+  1. Extrair o número do remetente (sem @c.us)
+  2. Verificar na tabela whitelist se o número existe e está ativo
+  3. Se NÃO estiver na whitelist → ignorar completamente a mensagem (não responder, apenas logar)
+  4. Se estiver → prosseguir normalmente
+  ```
+- Logar mensagem ignorada: `⛔ Número não autorizado: [numero] — mensagem ignorada`
+
+---
+
+### 2. INTEGRAÇÃO COM PLANILHA EXCEL (NOVA FUNCIONALIDADE — CORE)
+
+#### 2.1 Configuração da planilha no painel
+
+Criar seção **"Planilha de Dados"** na tela de configurações com:
+- Campo para upload da planilha `.xlsx`
+- Campo para informar o **nome da aba** a ser lida (padrão: `SD4`)
+- Botão **"Carregar / Atualizar Planilha"**
+- Exibir data/hora do último carregamento
+- Exibir quantidade de linhas carregadas (após filtro)
+- A planilha carregada deve ser salva em `./uploads/planilha_atual.xlsx`
+- Os dados filtrados e processados devem ser armazenados **em memória** (objeto/array global no Node.js) para consultas rápidas
+
+#### 2.2 Mapeamento de colunas da aba SD4
+
+| Coluna Excel | Índice | Campo interno | Descrição |
+|---|---|---|---|
+| B | 1 | `codigo_material` | Código do material |
+| D | 3 | `descricao` | Descrição do material |
+| F | 5 | `codigo_op` | Código da OP |
+| G | 6 | `qtd_empenho` | Quantidade de empenho |
+| H | 7 | `data_plano` | Data do plano (data da OP) |
+| K | 10 | `status_setor` | Status/setor (usado para filtro de exclusão) |
+| N | 13 | `estoque_atual` | Estoque atual |
+| O | 14 | `qtd_pedido_compra` | Quantidade do pedido de compra |
+| P | 15 | `data_pedido_compra` | Data de chegada do pedido de compra |
+
+> **ATENÇÃO:** A linha 1 da planilha é cabeçalho e deve ser ignorada. Os dados começam na linha 2.
+
+#### 2.3 Regra de filtro — Linhas que devem ser IGNORADAS
+
+Ao carregar a planilha, ignorar (excluir do processamento) todas as linhas onde a coluna K (`status_setor`) contenha qualquer um dos seguintes textos (comparação case-insensitive, verificar se CONTÉM o texto):
+
+```
+COMERCIAL
+EXPEDIÇÃO
+FINALIZADA
+QUALIDADE
+LOGISTICA
+#N/D
+```
+
+#### 2.4 Lógica de consumo do estoque por OP
+
+Quando houver uma consulta por OP, o sistema deve verificar quais materiais estão em falta seguindo esta lógica:
+
+```
+PARA CADA material distinto da OP consultada:
+  1. Obter o estoque_atual do material (coluna N)
+  2. Buscar TODAS as OPs que usam esse material (em toda a planilha, não só a OP consultada)
+  3. Ordenar essas OPs pela data_plano (coluna H) — da mais próxima para a mais distante
+  4. Simular o consumo do estoque seguindo essa ordem:
+     - OP mais próxima consome primeiro
+     - OP seguinte consome o restante, e assim por diante
+     - Estoque nunca fica negativo na simulação (se acabou, as próximas OPs ficam sem material)
+  5. Verificar quanto de estoque sobrou para a OP consultada especificamente
+  6. Se o estoque disponível para a OP < qtd_empenho da OP → material está EM FALTA
+  7. Calcular a quantidade em falta: qtd_empenho - estoque_disponivel_para_op
+```
+
+---
+
+### 3. MOTOR DE CONSULTA VIA WHATSAPP (SUBSTITUIR o motor de regras atual)
+
+O sistema deve detectar automaticamente o tipo de consulta com base no texto enviado pelo usuário:
+
+#### Detecção do tipo de consulta:
+
+```
+TIPO 1 — Consulta por OP:
+  - Texto enviado contém apenas números (ex: "123456", "OP 789")
+  - OU começa com "OP" seguido de números (case insensitive)
+  - OU o texto encontra correspondência na coluna F (codigo_op) da planilha
+
+TIPO 2 — Consulta por Código de Material:
+  - O texto enviado corresponde a algum valor na coluna B (codigo_material) da planilha
+  - Pode ser parcial (busca por "contém") ou exata
+
+TIPO 3 — Consulta desconhecida:
+  - Nenhum dos anteriores
+  - Responder: "❓ Não encontrei resultado para: [texto].\n\nEnvie um *código de OP* ou *código de material* para consultar."
+```
+
+#### Resposta para CONSULTA POR OP (Tipo 1):
+
+```
+Se não houver materiais em falta:
+────────────────────────────
+✅ *OP [numero]*
+Todos os materiais estão disponíveis!
+Nenhuma falta identificada para esta OP.
+────────────────────────────
+
+Se houver materiais em falta:
+────────────────────────────
+⚠️ *OP [numero]* — Materiais em falta:
+
+1️⃣ *[CODIGO_MATERIAL]* — [DESCRIÇÃO]
+   📦 Falta: [qtd_em_falta] unidades
+   🛒 Pedido: [qtd_pedido_compra] un.
+   📅 Previsão: [data_pedido_compra]
+
+2️⃣ *[CODIGO_MATERIAL]* — [DESCRIÇÃO]
+   📦 Falta: [qtd_em_falta] unidades
+   🛒 Pedido: [qtd_pedido_compra] un.
+   📅 Previsão: [data_pedido_compra]
+
+(... continua para cada material em falta)
+
+Total de materiais em falta: [N]
+────────────────────────────
+```
+
+#### Resposta para CONSULTA POR CÓDIGO DE MATERIAL (Tipo 2):
+
+```
+────────────────────────────
+📦 *Material: [CODIGO_MATERIAL]*
+📋 [DESCRIÇÃO COMPLETA]
+
+📊 Estoque atual: [estoque_atual] un.
+🛒 Pedido de compra: [qtd_pedido_compra] un.
+📅 Previsão de chegada: [data_pedido_compra]
+
+🏭 OPs que utilizam este material:
+• OP [codigo_op] — Empenho: [qtd_empenho] — Data: [data_plano]
+• OP [codigo_op] — Empenho: [qtd_empenho] — Data: [data_plano]
+(máximo 10 OPs listadas, ordenadas por data)
+────────────────────────────
+```
+
+> Se não encontrar o material: `❌ Material *[codigo]* não encontrado na planilha.`
+
+---
+
+### 4. PAINEL WEB — TELAS A CRIAR/MODIFICAR
+
+#### 4.1 Tela "Números Autorizados" (nova)
+- Rota: `/whitelist`
+- Formulário para adicionar: número (formato +55...) e nome/apelido
+- Tabela com todos os números cadastrados
+- Botão de toggle ativo/inativo por número
+- Botão de excluir
+- Badge mostrando quantos números estão ativos
+
+#### 4.2 Tela "Planilha / Banco de Dados" (nova)
+- Rota: `/planilha`
+- Upload de arquivo .xlsx
+- Seleção do nome da aba (input text, padrão "SD4")
+- Botão "Carregar Planilha"
+- Card mostrando: último carregamento, total de linhas, total de materiais distintos, total de OPs distintas
+- Tabela de preview com as primeiras 20 linhas carregadas (após filtro)
+- Botão "Recarregar" para atualizar sem fazer upload (relê o arquivo atual)
+- Botão de teste: campo de texto onde o usuário digita um código de OP ou material e clica "Testar Consulta" — exibe o resultado que seria enviado no WhatsApp
+
+#### 4.3 Tela "Configurações" (modificar a existente ou criar)
+- Adicionar seção: **"Tipo de Dados a Enviar"**
+  - Checkbox: ✅ Mostrar estoque atual
+  - Checkbox: ✅ Mostrar pedido de compra
+  - Checkbox: ✅ Mostrar previsão de chegada
+  - Checkbox: ✅ Mostrar lista de OPs (na consulta por material)
+  - Checkbox: ✅ Mostrar materiais sem falta (incluir ou omitir)
+  - Campo: Número máximo de OPs listadas por material (padrão: 10)
+- Essas preferências devem ser salvas no SQLite (tabela `config`) e usadas na formatação das respostas
+
+#### 4.4 Dashboard (modificar o existente)
+- Adicionar card: "Planilha carregada" (sim/não + data)
+- Adicionar card: "Materiais na base" (total)
+- Adicionar card: "OPs na base" (total)
+- Manter os cards existentes de status WA, mensagens hoje, respostas enviadas
+
+---
+
+### 5. SERVIÇO DE PLANILHA (NOVO ARQUIVO)
+
+Criar arquivo: `src/services/planilhaService.js`
+
+```javascript
+// Responsabilidades:
+// - Carregar e parsear o arquivo .xlsx usando SheetJS (biblioteca 'xlsx')
+// - Aplicar filtros de exclusão (coluna K)
+// - Armazenar dados em memória (dadosEmMemoria)
+// - Expor funções:
+//   consultarPorOP(codigoOP) → retorna array de materiais em falta com lógica de consumo
+//   consultarPorMaterial(codigoMaterial) → retorna dados do material + OPs que o usam
+//   detectarTipoConsulta(texto) → retorna 'op', 'material' ou 'desconhecido'
+//   obterEstatisticas() → { totalLinhas, totalMateriais, totalOPs, ultimoCarregamento }
+//   recarregarPlanilha() → relê o arquivo salvo em ./uploads/planilha_atual.xlsx
+```
+
+---
+
+### 6. CONTROLLER E ROTAS NOVAS
+
+Criar:
+- `src/controllers/whitelistController.js` → CRUD da whitelist
+- `src/controllers/planilhaController.js` → Upload, recarregar, preview, teste de consulta
+
+Adicionar rotas em `src/routes/index.js`:
+```
+GET  /whitelist              → lista números
+POST /whitelist/adicionar    → adiciona número
+POST /whitelist/toggle/:id   → ativa/desativa
+POST /whitelist/excluir/:id  → remove
+
+GET  /planilha               → tela principal
+POST /planilha/upload        → upload do arquivo xlsx
+POST /planilha/recarregar    → recarrega sem upload
+POST /planilha/testar        → testa consulta (retorna JSON)
+GET  /api/planilha/stats     → estatísticas da planilha (JSON)
+```
+
+---
+
+### 7. MODIFICAÇÕES NO whatsappService.js
+
+Substituir toda a lógica de `encontrarRegra()` e `processarMensagem()` pelo novo fluxo:
+
+```
+AO RECEBER MENSAGEM:
+  1. Verificar whitelist → se não autorizado, ignorar
+  2. Marcar como lida
+  3. Chamar planilhaService.detectarTipoConsulta(msg.body)
+  4. Se 'op'        → planilhaService.consultarPorOP(codigo)       → formatar → enviar
+  5. Se 'material'  → planilhaService.consultarPorMaterial(codigo) → formatar → enviar
+  6. Se 'desconhecido' → enviar mensagem de ajuda
+  7. Aplicar delay aleatório (continua igual)
+  8. Usar fila (continua igual)
+  9. Salvar no histórico (continua igual)
+  10. Enviar evento SSE para o painel (continua igual)
+```
+
+---
+
+### 8. DEPENDÊNCIAS A ADICIONAR
+
+No `package.json`, adicionar:
+```json
+"xlsx": "^0.18.5",
+"multer": "^1.4.5-lts.1"
+```
+
+- `xlsx` → leitura da planilha Excel (SheetJS)
+- `multer` → upload de arquivos no Express
+
+---
+
+### 9. ESTRUTURA DE PASTAS FINAL
+
+```
+zapauto/
+├── src/
+│   ├── config/database.js              ← adicionar tabela whitelist
+│   ├── controllers/
+│   │   ├── authController.js           ← sem alteração
+│   │   ├── dashboardController.js      ← modificar (novos cards)
+│   │   ├── rulesController.js          ← REMOVER (não é mais necessário)
+│   │   ├── whatsappController.js       ← pequenas modificações
+│   │   ├── logsController.js           ← sem alteração
+│   │   ├── whitelistController.js      ← NOVO
+│   │   └── planilhaController.js       ← NOVO
+│   ├── middleware/authMiddleware.js     ← sem alteração
+│   ├── models/                         ← pode remover (não usado)
+│   ├── services/
+│   │   ├── whatsappService.js          ← modificar (whitelist + nova lógica)
+│   │   ├── queueService.js             ← sem alteração
+│   │   └── planilhaService.js          ← NOVO (core da lógica)
+│   └── routes/index.js                 ← adicionar novas rotas
+├── views/
+│   ├── partials/header.ejs             ← modificar (novos links no menu)
+│   ├── login.ejs                       ← sem alteração
+│   ├── dashboard.ejs                   ← modificar (novos cards)
+│   ├── connection.ejs                  ← sem alteração
+│   ├── rules.ejs                       ← REMOVER (substituída)
+│   ├── whitelist.ejs                   ← NOVA
+│   ├── planilha.ejs                    ← NOVA
+│   ├── send.ejs                        ← sem alteração
+│   └── logs.ejs                        ← sem alteração
+├── uploads/                            ← NOVA PASTA (criada automaticamente)
+│   └── planilha_atual.xlsx             ← arquivo enviado pelo usuário
+├── public/
+│   ├── css/style.css                   ← pequenas adições de estilo
+│   └── js/app.js                       ← sem alteração
+├── app.js                              ← sem alteração
+└── package.json                        ← adicionar xlsx e multer
+```
+
+---
+
+### 10. REQUISITOS TÉCNICOS OBRIGATÓRIOS
+
+1. **Todo o código deve ser 100% comentado em português**
+2. **Manter o sistema de SSE** (Server-Sent Events) para logs e status em tempo real
+3. **Manter delay aleatório** e fila de mensagens anti-ban
+4. **Manter autenticação** do painel (admin/admin123 hardcoded)
+5. **Manter sessão persistente** do WhatsApp (LocalAuth)
+6. **A planilha deve ser recarregável** sem reiniciar o servidor (botão no painel)
+7. **Se a planilha não estiver carregada**, responder no WhatsApp: `⚠️ Sistema em manutenção. Tente novamente em alguns minutos.`
+8. **Tratar erros de leitura** da planilha com log detalhado no painel
+9. **Datas** devem ser formatadas como `DD/MM/YYYY` nas respostas do WhatsApp
+10. **Números sem dados** (estoque null, pedido null) devem exibir `"—"` em vez de `null` ou `undefined`
+
+---
+
+### 11. EXEMPLO DE FLUXO COMPLETO (para validação)
+
+**Cenário:** Usuário envia `789456` (código de uma OP)
+
+```
+1. Sistema recebe: "789456"
+2. Verifica whitelist: número autorizado ✅
+3. detectarTipoConsulta("789456") → verifica se existe como OP na planilha → retorna 'op'
+4. consultarPorOP("789456"):
+   a. Busca todas as linhas com codigo_op = "789456"
+   b. Para cada material da OP:
+      - Material: 50.08.0383
+      - Estoque atual: 11
+      - Todas as OPs que usam 50.08.0383 ordenadas por data_plano:
+        * OP 111111 data: 16/03 empenho: 5  → consume 5  → resta: 6
+        * OP 222222 data: 23/03 empenho: 4  → consume 4  → resta: 2
+        * OP 789456 data: 30/03 empenho: 8  → consume 2  → FALTA 6
+      - Material está em falta: faltam 6 unidades
+   c. Retorna lista de materiais em falta com dados do pedido de compra
+5. Formatar resposta com emojis e estrutura definida
+6. Adicionar delay de 2-5s
+7. Enviar resposta via WhatsApp
+8. Salvar no histórico
+9. Logar no painel
+```
+
+---
+
+## ENTREGA ESPERADA
+
+Entregue **arquivo por arquivo**, separados em blocos de código markdown, na seguinte ordem:
+
+1. `package.json` (atualizado)
+2. `src/config/database.js` (com tabela whitelist)
+3. `src/services/planilhaService.js` (NOVO — core)
+4. `src/services/whatsappService.js` (modificado)
+5. `src/controllers/whitelistController.js` (NOVO)
+6. `src/controllers/planilhaController.js` (NOVO)
+7. `src/controllers/dashboardController.js` (modificado)
+8. `src/routes/index.js` (atualizado)
+9. `views/whitelist.ejs` (NOVA)
+10. `views/planilha.ejs` (NOVA)
+11. `views/dashboard.ejs` (modificado)
+12. `views/partials/header.ejs` (modificado)
+13. `app.js` (se necessário)
+
+**Código 100% comentado em português. Pronto para rodar com `npm install && npm run dev`.**

@@ -1,0 +1,16 @@
+packages:
+  "recharts": "Beautiful charting library for dashboard analytics"
+  "framer-motion": "Smooth animations for page transitions and UI elements"
+  "date-fns": "Easy date formatting for history and timestamps"
+  "clsx": "Utility for constructing className strings"
+  "tailwind-merge": "Utility to seamlessly merge Tailwind classes"
+  "@radix-ui/react-slot": "For reusable component slots"
+
+images:
+  - path: "artifacts/zapauto/public/images/logo-mark.png"
+    description: "A minimal, modern geometric logo mark for an analytics and automation system called ZapAuto, using deep navy blue and bright electric blue colors, transparent background"
+    aspect_ratio: "1:1"
+
+notes:
+  - Assumes API hooks from @workspace/api-client-react are available and correctly typed
+  - WhatsApp QR polling should happen every 3 seconds when in qr_ready state

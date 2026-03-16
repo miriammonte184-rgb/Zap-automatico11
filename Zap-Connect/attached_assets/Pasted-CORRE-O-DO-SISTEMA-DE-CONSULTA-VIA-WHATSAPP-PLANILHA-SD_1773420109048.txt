@@ -1,0 +1,100 @@
+CORREÇÃO DO SISTEMA DE CONSULTA VIA WHATSAPP – PLANILHA SD4
+
+O sistema de consulta via WhatsApp conectado à planilha precisa de alguns ajustes importantes.
+
+PROBLEMA 1 — CÓDIGOS DE MATERIAL QUE COMEÇAM COM ZERO
+
+O sistema não está encontrando materiais que possui zeros de inicio como:
+
+0000001870
+
+
+Isso acontece porque o sistema está convertendo o código do material para número e removendo os zeros iniciais.
+
+CORREÇÃO NECESSÁRIA
+
+• O código do material deve ser tratado sempre como TEXTO.
+• A busca deve ser feita exatamente como texto na coluna B da planilha.
+• O sistema não pode remover zeros à esquerda.
+• Exemplo: o código "0000001870" deve ser buscado exatamente com todos os zeros.
+
+A coluna B da planilha (código do material) deve ser lida como TEXTO.
+
+PROBLEMA 2 — SISTEMA RESPONDENDO PARA TODOS OS CONTATOS
+
+O sistema não pode responder para qualquer pessoa.
+
+REGRAS
+
+• Criar uma lista de números autorizados (whitelist).
+• O sistema deve responder apenas para números dessa lista.
+• Se a mensagem vier de um número que não está na lista, o sistema deve ignorar a mensagem.
+
+Exemplo de números autorizados:
+
++5511991156740
++55119XXXXXXXX
+
+PROBLEMA 3 — BLOQUEAR USO EM GRUPOS
+
+O sistema não pode funcionar em grupos de WhatsApp.
+
+REGRAS
+
+• Se a mensagem vier de um grupo, o sistema deve ignorar completamente.
+• O sistema deve responder apenas em conversa privada.
+
+PROBLEMA 4 — DATA DO PEDIDO DE COMPRA INCORRETA
+
+A data da coluna P está vindo como número (exemplo: 46108).
+
+Isso acontece porque o Excel salva datas como número serial.
+
+CORREÇÃO
+
+O sistema deve converter automaticamente para formato de data real.
+
+Formato correto da resposta:
+
+DD/MM/AAAA
+
+Exemplo:
+13/03/2026
+
+PLANILHA UTILIZADA
+
+Aba: SD4
+
+COLUNAS
+
+B = Código do material
+D = Descrição do material
+F = OP
+G = Empenho
+H = Data do plano
+K = Status (usado para filtro)
+N = Estoque atual
+O = Quantidade de pedido de compra
+P = Data de chegada do pedido de compra
+
+FILTRO NECESSÁRIO
+
+Ignorar todas as linhas onde a coluna K contenha:
+
+COMERCIAL
+EXPEDIÇÃO
+FINALIZADA
+QUALIDADE
+LOGISTICA
+#N/D
+
+COMPORTAMENTO DA CONSULTA
+
+Quando o usuário enviar um código de material, o sistema deve responder automaticamente com:
+
+Código do material – Descrição
+Estoque atual: X
+Pedido de compra: X
+Previsão de chegada: DD/MM/AAAA
+
+A resposta deve ser clara e fácil de ler no WhatsApp.

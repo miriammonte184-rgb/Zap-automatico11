@@ -1,0 +1,564 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: ZapAuto - WhatsApp Materials Consultation System
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: whatsapp
+    description: WhatsApp connection operations
+  - name: spreadsheet
+    description: Spreadsheet data operations
+  - name: query
+    description: Material and OP query operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /whatsapp/status:
+    get:
+      operationId: getWhatsappStatus
+      tags: [whatsapp]
+      summary: Get WhatsApp connection status
+      responses:
+        "200":
+          description: WhatsApp status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappStatus"
+
+  /whatsapp/qrcode:
+    get:
+      operationId: getWhatsappQrcode
+      tags: [whatsapp]
+      summary: Get WhatsApp QR Code
+      responses:
+        "200":
+          description: QR Code data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QrCodeData"
+
+  /whatsapp/connect:
+    post:
+      operationId: connectWhatsapp
+      tags: [whatsapp]
+      summary: Start WhatsApp connection and generate QR code
+      responses:
+        "200":
+          description: Connection started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+
+  /whatsapp/disconnect:
+    post:
+      operationId: disconnectWhatsapp
+      tags: [whatsapp]
+      summary: Disconnect WhatsApp session
+      responses:
+        "200":
+          description: Disconnected successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+
+  /whatsapp/whitelist:
+    get:
+      operationId: getWhitelist
+      tags: [whatsapp]
+      summary: Get authorized phone numbers
+      responses:
+        "200":
+          description: Whitelist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhitelistResponse"
+    post:
+      operationId: addToWhitelist
+      tags: [whatsapp]
+      summary: Add phone number to whitelist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddPhoneRequest"
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+
+  /whatsapp/whitelist/{phone}:
+    delete:
+      operationId: removeFromWhitelist
+      tags: [whatsapp]
+      summary: Remove phone number from whitelist
+      parameters:
+        - name: phone
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+
+  /spreadsheet/upload:
+    post:
+      operationId: uploadSpreadsheet
+      tags: [spreadsheet]
+      summary: Upload spreadsheet file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+                - file
+      responses:
+        "200":
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResult"
+
+  /spreadsheet/status:
+    get:
+      operationId: getSpreadsheetStatus
+      tags: [spreadsheet]
+      summary: Get spreadsheet status
+      responses:
+        "200":
+          description: Spreadsheet status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpreadsheetStatus"
+
+  /spreadsheet/stats:
+    get:
+      operationId: getSpreadsheetStats
+      tags: [spreadsheet]
+      summary: Get spreadsheet statistics and preview rows
+      responses:
+        "200":
+          description: Spreadsheet stats with preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpreadsheetStatsResponse"
+
+  /query/op/{opCode}:
+    get:
+      operationId: queryByOp
+      tags: [query]
+      summary: Query materials missing for an OP
+      parameters:
+        - name: opCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OP query result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpQueryResult"
+
+  /query/material/{materialCode}:
+    get:
+      operationId: queryByMaterial
+      tags: [query]
+      summary: Query a specific material
+      parameters:
+        - name: materialCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Material query result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaterialQueryResult"
+
+  /query/history:
+    get:
+      operationId: getQueryHistory
+      tags: [query]
+      summary: Get recent query history
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Query history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryHistoryResponse"
+
+  /query/stats:
+    get:
+      operationId: getQueryStats
+      tags: [query]
+      summary: Get query statistics
+      responses:
+        "200":
+          description: Query stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryStats"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    WhatsappStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        phone:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [disconnected, connecting, connected, qr_ready]
+      required:
+        - connected
+        - status
+
+    QrCodeData:
+      type: object
+      properties:
+        qrCode:
+          type: string
+          nullable: true
+        status:
+          type: string
+      required:
+        - status
+
+    OperationResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+        - message
+
+    WhitelistResponse:
+      type: object
+      properties:
+        numbers:
+          type: array
+          items:
+            type: string
+        total:
+          type: integer
+      required:
+        - numbers
+        - total
+
+    AddPhoneRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+      required:
+        - phone
+
+    UploadResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        rowCount:
+          type: integer
+        fileName:
+          type: string
+      required:
+        - success
+        - message
+
+    SpreadsheetStatus:
+      type: object
+      properties:
+        loaded:
+          type: boolean
+        fileName:
+          type: string
+          nullable: true
+        rowCount:
+          type: integer
+        lastUpdated:
+          type: string
+          nullable: true
+      required:
+        - loaded
+        - rowCount
+
+    PreviewRow:
+      type: object
+      properties:
+        materialCode:
+          type: string
+        description:
+          type: string
+        opCode:
+          type: string
+        empenhQty:
+          type: number
+        planDateStr:
+          type: string
+        status:
+          type: string
+        currentStock:
+          type: number
+        purchaseOrderQty:
+          type: string
+        expectedArrival:
+          type: string
+      required:
+        - materialCode
+        - description
+        - opCode
+        - empenhQty
+        - planDateStr
+        - status
+        - currentStock
+        - purchaseOrderQty
+        - expectedArrival
+
+    SpreadsheetStatsResponse:
+      type: object
+      properties:
+        totalRows:
+          type: integer
+        totalMaterials:
+          type: integer
+        totalOps:
+          type: integer
+        loaded:
+          type: boolean
+        fileName:
+          type: string
+          nullable: true
+        lastUpdated:
+          type: string
+          nullable: true
+        previewRows:
+          type: array
+          items:
+            $ref: "#/components/schemas/PreviewRow"
+      required:
+        - totalRows
+        - totalMaterials
+        - totalOps
+        - loaded
+        - previewRows
+
+    MissingMaterial:
+      type: object
+      properties:
+        materialCode:
+          type: string
+        description:
+          type: string
+        qtdFalta:
+          type: number
+        purchaseOrderQty:
+          type: string
+          nullable: true
+        expectedArrival:
+          type: string
+          nullable: true
+      required:
+        - materialCode
+        - description
+        - qtdFalta
+
+    OpQueryResult:
+      type: object
+      properties:
+        opCode:
+          type: string
+        found:
+          type: boolean
+        hasMissingMaterials:
+          type: boolean
+        missingMaterials:
+          type: array
+          items:
+            $ref: "#/components/schemas/MissingMaterial"
+        message:
+          type: string
+      required:
+        - opCode
+        - found
+        - hasMissingMaterials
+        - missingMaterials
+
+    OpUsage:
+      type: object
+      properties:
+        opCode:
+          type: string
+        empenhQty:
+          type: number
+        planDateStr:
+          type: string
+      required:
+        - opCode
+        - empenhQty
+        - planDateStr
+
+    MaterialQueryResult:
+      type: object
+      properties:
+        materialCode:
+          type: string
+        description:
+          type: string
+        currentStock:
+          type: number
+          nullable: true
+        purchaseOrderQty:
+          type: string
+          nullable: true
+        expectedArrival:
+          type: string
+          nullable: true
+        opsUsing:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpUsage"
+        found:
+          type: boolean
+      required:
+        - materialCode
+        - found
+        - opsUsing
+
+    QueryHistoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        queryType:
+          type: string
+          enum: [op, material]
+        queryValue:
+          type: string
+        phoneNumber:
+          type: string
+          nullable: true
+        result:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - queryType
+        - queryValue
+        - result
+        - createdAt
+
+    QueryHistoryResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/QueryHistoryItem"
+        total:
+          type: integer
+      required:
+        - items
+        - total
+
+    QueryStats:
+      type: object
+      properties:
+        totalQueries:
+          type: integer
+        queriesLast24h:
+          type: integer
+        opQueries:
+          type: integer
+        materialQueries:
+          type: integer
+        uniqueUsers:
+          type: integer
+        totalMaterials:
+          type: integer
+        totalOps:
+          type: integer
+        sheetLoaded:
+          type: boolean
+      required:
+        - totalQueries
+        - queriesLast24h
+        - opQueries
+        - materialQueries
+        - uniqueUsers
+        - totalMaterials
+        - totalOps
+        - sheetLoaded

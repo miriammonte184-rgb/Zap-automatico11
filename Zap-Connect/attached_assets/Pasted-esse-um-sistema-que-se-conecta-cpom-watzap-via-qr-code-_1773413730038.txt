@@ -1,0 +1,80 @@
+esse é um sistema que se conecta cpom watzap via qr code, é um sistema de watzap de resposta pré programda, quero mudar esse sistema para  que funcione  com um sistema automático de consulta de materiais e OPs usando uma planilha como banco de dados: Analise Material 12.03.
+
+ORIGEM DOS DADOS
+Planilha com aba chamada: SD4
+
+COLUNAS que deve ser UTILIZADAS
+B = Código do material
+D = Descrição do material
+F = Códigoda OPs
+G = Quantidade de empenho
+H = Data do plano (data da OPs)
+K = Status / setor (usado para filtro)
+N = Estoque atual
+O = Quantidade de pedido de compra
+P = Data de chegada do pedido de compra
+
+REGRAS DE FILTRO
+Ao buscar dados na planilha SD4, o sistema deve ignorar todas as linhas onde a coluna K contenha qualquer um dos seguintes textos:
+
+COMERCIAL
+EXPEDIÇÃO
+FINALIZADA
+QUALIDADE
+LOGISTICA
+#N/D
+
+Essas linhas não devem entrar no cálculo nem aparecer no resultado.
+
+LÓGICA DE CONSUMO DO MATERIAL
+O sistema deve calcular o consumo do material somando os empenhos (coluna G).
+
+O consumo deve seguir a ordem correta das OPs:
+
+1. Ordenar as OPs pela data do plano (coluna H).
+2. A OP com a data mais próxima deve consumir o material primeiro.
+3. OPs com datas mais distantes não podem consumir material antes das mais próximas.
+4. O consumo deve ocorrer de baixo para cima respeitando a ordem de data.
+
+COMPORTAMENTO DA CONSULTA NO WHATSAPP
+
+O usuário poderá enviar apenas:
+
+* Número da OP
+  ou
+* Código do material
+
+CASO O USUÁRIO ENVIE UMA OP
+
+O sistema deve:
+
+1. Filtrar todas as linhas da planilha com aquela OP.
+2. Verificar se existe falta de material considerando estoque (coluna N) e consumo ordenado.
+3. Mostrar apenas os materiais que estão em falta nessa OP.
+
+A resposta deve ser automática e organizada assim:
+
+Mensagem inicial informando que existem materiais em falta na OP.
+
+Para cada material em falta mostrar:
+
+Código do material – Descrição do material
+Pedido de compra: quantidade do pedido de compra (coluna O)
+Previsão de chegada: data do pedido de compra (coluna P)
+
+Não listar materiais que não estão faltando.
+
+CASO O USUÁRIO ENVIE APENAS O CÓDIGO DO MATERIAL
+
+O sistema deve retornar:
+
+Código do material
+Descrição do material
+Quantidade de pedido de compra (coluna O)
+Data de chegada do pedido de compra (coluna P)
+
+FORMATO DA RESPOSTA
+
+A resposta do WhatsApp deve ser clara e organizada, em formato de lista, fácil de ler no celular.
+
+Todas as respostas devem ser automáticas após o usuário enviar o código da OP ou o código do material.
